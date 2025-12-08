@@ -43,8 +43,8 @@ class RewardPredictor():
         [model.eval() for model in self.predictors]
         
         with torch.no_grad():
-            print(f'seq_obs shape: {seq_obs.shape}')
-            print(f'seq_obs.unsqueeze(0) shape: {seq_obs.unsqueeze(0).shape}')
+            # print(f'seq_obs shape: {seq_obs.shape}')
+            # print(f'seq_obs.unsqueeze(0) shape: {seq_obs.unsqueeze(0).shape}')
             
             # FIXME below is not batched?
             preds = torch.stack([p.forward(seq_obs, seq_actions) for p in self.predictors]).view(self.n_predictors, -1).cpu()
@@ -100,7 +100,12 @@ class RewardPredictor():
         gamma = torch.tensor(gamma, dtype=torch.float32)
         self.dataset.append((seg1, seg2, gamma))
     
-    def get_synthetic_feedback(self, k : int) -> None:
+    def get_synthetic_feedback(self, k : int):
+        '''
+        Args:        
+            k: number of trajectories to add to `self.dataset` and generate synthetic 
+            feedback for
+        '''
         for i in range(k):
             # generate 2 random indices
             segments = sorted(sample(range(len(self.temp_experience['seq_obs'])), 2))
@@ -130,7 +135,7 @@ class RewardPredictor():
             
             self.add_feedback(seg1=(seq_obs_1, seq_actions_1), 
                                   seg2=(seq_obs_2, seq_actions_2), 
-                                  gamma=torch.Tensor(gamma))
+                                  gamma=torch.Tensor([gamma]))
             
 
 class RewardPredictorNet(torch.nn.Module):
@@ -157,7 +162,7 @@ class RewardPredictorNet(torch.nn.Module):
             torch.nn.LeakyReLU(0.01),
             torch.nn.Linear(64, 64), 
             torch.nn.LeakyReLU(0.01),
-            torch.nn.Linear(64, 1) # scalar reward dum dum
+            torch.nn.Linear(64, seq_len) # scalar reward dum dum
         )
         
         self.device = device
@@ -166,8 +171,8 @@ class RewardPredictorNet(torch.nn.Module):
         
         self.kappa = kappa
         
-        print(f'RewardPredictorNet initialized!')
-        print(f'{self.model}')
+        # print(f'RewardPredictorNet initialized!')
+        # print(f'{self.model}')
     
     def forward(self, seq_obs: torch.Tensor, seq_actions : torch.Tensor):
         seq_obs = seq_obs.to(self.device)
@@ -175,11 +180,11 @@ class RewardPredictorNet(torch.nn.Module):
         
         # flatten input obs
         seq_obs_flat = torch.flatten(seq_obs)
-        print(f'seq_obs_flat shape: {seq_obs_flat.shape}')
+        # print(f'seq_obs_flat shape: {seq_obs_flat.shape}')
         seq_actions_flat = torch.flatten(seq_actions)
-        print(f'seq_actions_flat shape: {seq_actions_flat.shape}')
+        # print(f'seq_actions_flat shape: {seq_actions_flat.shape}')
         
-        print(f'torch.cat(...) shape: {torch.cat((seq_obs_flat, seq_actions_flat)).shape}')
+        # print(f'torch.cat(...) shape: {torch.cat((seq_obs_flat, seq_actions_flat)).shape}')
         
         return self.model(torch.cat((seq_obs_flat, seq_actions_flat)))
     

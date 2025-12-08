@@ -1,0 +1,2 @@
+In the modified `RLHFEnv`:
+- `info['true_reward']` contains the reward received for *just* the last state and action, NOT the cumulative reward up to that point in the trajectory. Know this is the case because when the agent crashed `info['true_reward']` had a value of exactly -100 when in the previous step it was 17.something. Know from env description that the agent gets an *additional* -100 reward for crashing

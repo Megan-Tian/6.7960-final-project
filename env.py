@@ -50,15 +50,11 @@ class RLHFEnv(gym.Wrapper):
         
         info['pred_reward'] = pred_reward.item()
         info['true_reward'] = true_reward
-        
-        # printpred_reward))
-        
+                
         return obs, pred_reward.item(), terminated, truncated, info
     
-    
-    
-    
-if __name__ == "__main__":
+
+def check_custom_env():
     env = make_ll_env()
     obs_shape = env.observation_space.shape
     action_shape = env.action_space.shape
@@ -70,8 +66,8 @@ if __name__ == "__main__":
                                   ),
                   seq_len=10)
     env.reset()
-    print(env.seq_actions.shape)
-    print(env.seq_obs.shape)
+    # print(env.seq_actions.shape)
+    # print(env.seq_obs.shape)
     
     try:
         check_env(env)
@@ -79,3 +75,49 @@ if __name__ == "__main__":
         print(f'Failed check_env w/ exception: {e}')
     else:
         print('Success check_env(RLHFEnv)')
+
+def random_policy():
+    env = make_ll_env(render_mode='human')
+    obs_shape = env.observation_space.shape
+    action_shape = env.action_space.shape
+    env = RLHFEnv(env, 
+                  RewardPredictor(obs_shape, 
+                                  action_shape, 
+                                  seq_len=10,
+                                  n_predictors=10,
+                                  ),
+                  seq_len=10)
+   
+    # generate two trajectory segments, each with random actions and observations
+    for _ in range(3):
+        obs, info = env.reset()    
+        i = 0
+        terminated = truncated = False
+        while not (terminated or truncated):
+            action = env.action_space.sample()
+            obs, reward, terminated, truncated, info = env.step(action)
+            env.render()
+            # print(info)
+            
+            i += 1
+    
+        # check recorded experience lengths
+        print(f"episode length = {i}")
+        print(f"env.reward_predictor.temp_experience['true_reward'] = {len(env.reward_predictor.temp_experience['true_reward'])}")
+        print(f"env.reward_predictor.temp_experience['seq_obs'] = {len(env.reward_predictor.temp_experience['seq_obs'])}")
+        print(f"env.reward_predictor.temp_experience['seq_actions'] = {len(env.reward_predictor.temp_experience['seq_actions'])}")
+    
+    print('=' * 100)
+    # dataset manipulation in the reward predictor
+    k = 5
+    print(f'Reward predictor dataset = {env.reward_predictor.dataset}')
+    print(f'Getting synthetic feedback for k = {k}')
+    env.reward_predictor.get_synthetic_feedback(k)
+    print(f'Reward predictor dataset len = {len(env.reward_predictor.dataset)}')
+    print(f'Reward predictor dataset entries: obs1 {env.reward_predictor.dataset[0][0][0].shape} | obs2 {env.reward_predictor.dataset[0][1][0].shape} | gamma {env.reward_predictor.dataset[0][2]}')
+    print('=' * 100)
+    
+if __name__ == "__main__":
+    check_custom_env()
+    random_policy()
+    
