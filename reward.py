@@ -179,6 +179,11 @@ class RewardPredictorNet(torch.nn.Module):
         
         # print(f'RewardPredictorNet initialized!')
         # print(f'{self.model}')
+        
+        self.optimizer = torch.optim.Adam(self.parameters(), 
+                                          lr=self.lr, 
+                                          weight_decay=self.weight_decay,
+                                          )
     
     def forward(self, seq_obs: torch.Tensor, seq_actions : torch.Tensor):
         seq_obs = seq_obs.to(self.device)
@@ -198,11 +203,6 @@ class RewardPredictorNet(torch.nn.Module):
         '''
         `data` has data samples (traj1, traj2, mu)
         '''
-        self.optimizer = torch.optim.Adam(self.parameters(), 
-                                          lr=self.lr, 
-                                          weight_decay=self.weight_decay,
-                                          )
-        
         self.optimizer.zero_grad()
         run_loss = 0
         
@@ -239,6 +239,7 @@ class RewardPredictorNet(torch.nn.Module):
         # print(f'labels {labels} \n preds {preds}')
         labels = torch.tensor(labels, requires_grad=True).to(self.device)
         preds = torch.tensor(preds, requires_grad=True).to(self.device)
+        assert torch.all((preds >= 0) & (preds <= 1)), "ERROR preds must be in [0,1]"
         self.kappa = torch.tensor([self.kappa]).to(self.device)
         # print(f'labels shape: {labels} | preds shape: {preds} | kappa : {torch.tensor(self.kappa)}')
         loss = self._beta_nll_loss(labels, preds, self.kappa)
