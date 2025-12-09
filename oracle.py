@@ -1,3 +1,4 @@
+import math
 import gymnasium as gym
 import torch
 from stable_baselines3 import PPO
@@ -46,10 +47,10 @@ def eval(saved_model_name=ORACLE_NAME):
         env, 
         n_eval_episodes=n_eval_episodes, 
         deterministic=True,
-        render=True,
+        render=False,
         return_episode_rewards=True
     )
-    print(f'Evaluated model from {saved_model_name} for {n_eval_episodes} episodes\n\tMean reward = {rewards.mean()} | Std reward {rewards.std()}')
+    print(f'Evaluated model from {saved_model_name} for {n_eval_episodes} episodes\n\tMean reward = {sum(rewards) / len(rewards)} | ep lens reward {sum(ep_lens) / len(rewards)}')
     
     obs, info = env.reset()
     terminated = truncated = False
@@ -62,5 +63,5 @@ def eval(saved_model_name=ORACLE_NAME):
     
     
 if __name__ == "__main__":
-    train('ppo_lunarlander_100k', None)
+    # train('ppo_lunarlander_100k', None)
     eval('ppo_lunarlander_100k')
