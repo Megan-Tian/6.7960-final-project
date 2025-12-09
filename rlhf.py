@@ -10,6 +10,10 @@ from stable_baselines3.common.evaluation import evaluate_policy
 
 import gymnasium as gym
 
+
+SEQ_LEN = 25 # Christiano et al 2017 appendix A.2 use 25 steps for Atari clips
+N_PREDICTORS = 3 # also from Christiano et al
+
 def get_device():
     return "cuda" if th.cuda.is_available() else "cpu"
 
@@ -21,22 +25,17 @@ def load_run(model_name):
     env = RLHFEnv(env, 
                   RewardPredictor(obs_shape, 
                                   action_shape, 
-                                  seq_len=10,
-                                  n_predictors=10,
+                                  seq_len=SEQ_LEN,
+                                  n_predictors=N_PREDICTORS,
                                   ),
-                  seq_len=10)
+                  seq_len=SEQ_LEN)
     print(env.reward_predictor.predictors[0])
     obs, info = env.reset()
     terminated = truncated = False
-    # # cell and hidden state of the LSTM
-    # lstm_states = None
-    # num_envs = 1
-    # # Episode start signals are used to reset the lstm states
-    # episode_starts = np.ones((num_envs,), dtype=bool)
+    
     while not (terminated or truncated):
         action, _ = model.predict(obs, deterministic=True)
         obs, rewards, terminated, truncated, info = env.step(action)
-        # episode_starts = dones
         env.render()
         
     rewards, lens = evaluate_policy(model.policy, 
@@ -48,27 +47,23 @@ def load_run(model_name):
                                 )
     print(f'Evaluated model from {model_name} for 10 episodes\n\tMean reward = {np.mean(rewards)} | Std reward {np.std(rewards)} | mean len {np.mean(lens)}')
 
-def rp_train(model_name):    
+def rp_train(model_name):  
+    device = get_device()  
     env = make_ll_env()
     obs_shape = env.observation_space.shape
     action_shape = env.action_space.shape
+    
+
     reward_model = RewardPredictor(obs_shape, 
                                   action_shape, 
-                                  seq_len=10,
-                                  n_predictors=10,
+                                  seq_len=SEQ_LEN,
+                                  n_predictors=N_PREDICTORS,
+                                  device=device
                                   )
     env = RLHFEnv(env, 
                   reward_model,
-                  seq_len=10)
+                  seq_len=SEQ_LEN)
     
-    device = get_device()
-    
-    # env = EnvWrapper(env=env, reward_predictor=reward_model, seq_len=30)
-
-    # Define the custom policy with normalized_images set to False
-    # policy_kwargs = dict(
-    #     normalize_images=False
-    # )
 
     model = PPO('MlpPolicy', env,
                          n_steps=512,
@@ -86,36 +81,10 @@ def rp_train(model_name):
 
     model.save(model_name)
 
-# def normal_train(model_name):
-#     env = gym.make("ALE/Enduro-v5", obs_type="grayscale", full_action_space=True)
-    
-#     env = EnvWrapper(env=env, reward_predictor=None, seq_len=30)
-
-#     # Define the custom policy with normalized_images set to False
-#     policy_kwargs = dict(
-#         normalize_images=False
-#     )
-
-#     model = RecurrentPPO(CnnLstmPolicy, env, policy_kwargs=policy_kwargs,
-#                          n_steps=512,
-#                          batch_size=64,
-#                          verbose=2,
-#                          learning_rate=2e-5, tensorboard_log="reward_pred_runs/conventional_train/")
-#     #print(model.policy)
-
-    
-#     callback = TrainRewardPredictorCallback(rp=None)
-#     try:
-#         model.learn(30_000, callback=callback)
-#     except KeyboardInterrupt as e:
-#         print(e)
-
-#     model.save(model_name)
-
 def main():
-    rp_train("model_tmp_2")
+    rp_train("model_tmp")
     # normal_train("normal_model")
-    load_run("model_tmp_2")
+    load_run("model_tmp")
     
 
 if __name__ == "__main__":
