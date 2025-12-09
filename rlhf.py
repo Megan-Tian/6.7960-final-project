@@ -42,7 +42,7 @@ def load_run(model_name):
                                     env, 
                                     n_eval_episodes=10, 
                                     deterministic=True, 
-                                    render=True, 
+                                    # render=True, 
                                     return_episode_rewards=True
                                 )
     print(f'Evaluated model from {model_name} for 10 episodes\n\tMean reward = {np.mean(rewards)} | Std reward {np.std(rewards)} | mean len {np.mean(lens)}')
@@ -66,7 +66,7 @@ def rp_train(model_name, is_feedback_continuous):
     
 
     model = PPO('MlpPolicy', env,
-                         n_steps=2048, # default 2048
+                         n_steps=4096, # default 2048
                          batch_size=64, # default 64
                          verbose=2,
                         #  learning_rate=2e-5, 
@@ -84,9 +84,9 @@ def rp_train(model_name, is_feedback_continuous):
 
 def main():
     is_feedback_continuous = False
-    rp_train(f"model_tmp_fc={is_feedback_continuous}", is_feedback_continuous)
+    rp_train(f"model_fc={is_feedback_continuous}", is_feedback_continuous)
     # normal_train("normal_model")
-    load_run(f"model_tmp_fc={is_feedback_continuous}")
+    load_run(f"model_fc={is_feedback_continuous}")
     
 
 if __name__ == "__main__":

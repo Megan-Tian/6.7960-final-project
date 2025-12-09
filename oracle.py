@@ -1,12 +1,13 @@
 import math
 import gymnasium as gym
+import numpy as np
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.sac.policies import MlpPolicy
 
 ORACLE_NAME = 'ppo_lunarlander'
-TRAIN_STEPS = 200_000
+TRAIN_STEPS = 300_000
 
 def make_ll_env(render_mode = None):
     return gym.make(
@@ -39,8 +40,8 @@ def train(save_model_name=ORACLE_NAME, train_from_checkpoint=None):
     
 def eval(saved_model_name=ORACLE_NAME):
     model = PPO.load(saved_model_name)
-    env = make_ll_env(render_mode='human')
-    n_eval_episodes = 5
+    env = make_ll_env()
+    n_eval_episodes = 30
     
     # episode is considered a "solution" if it scores >= 200
     rewards, ep_lens = evaluate_policy(
@@ -51,18 +52,18 @@ def eval(saved_model_name=ORACLE_NAME):
         render=False,
         return_episode_rewards=True
     )
-    print(f'Evaluated model from {saved_model_name} for {n_eval_episodes} episodes\n\tMean reward = {sum(rewards) / len(rewards)} | ep lens reward {sum(ep_lens) / len(rewards)}')
+    print(f'Evaluated model from {saved_model_name} for {n_eval_episodes} episodes\n\tMean reward = {np.mean(rewards)} | std rewards {np.std(rewards)}\nep lens mean {np.mean(ep_lens)} | ep lens std {np.std(ep_lens)}')
     
-    obs, info = env.reset()
-    terminated = truncated = False
-    while not (terminated or truncated):
-        action, _ = model.predict(obs)
-        obs, reward, terminated, truncated, info = env.step(action)
-        env.render()
+    # obs, info = env.reset()
+    # terminated = truncated = False
+    # while not (terminated or truncated):
+    #     action, _ = model.predict(obs)
+    #     obs, reward, terminated, truncated, info = env.step(action)
+        # env.render()
     
 
     
     
 if __name__ == "__main__":
-    train(f'ppo_lunarlander_{TRAIN_STEPS}', None)
+    # train(f'ppo_lunarlander_{TRAIN_STEPS}', None)
     eval(f'ppo_lunarlander_{TRAIN_STEPS}')
