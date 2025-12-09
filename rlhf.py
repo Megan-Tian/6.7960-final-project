@@ -85,7 +85,7 @@ def rp_train(model_name, is_feedback_continuous, kappa):
 
 def main():
     is_feedback_continuous = True
-    kappa = 5
+    kappa = 40
     rp_train(f"model_fc={is_feedback_continuous}_kappa={kappa}", 
              is_feedback_continuous,
              kappa)
