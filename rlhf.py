@@ -6,6 +6,7 @@ from stable_baselines3 import PPO
 from oracle import make_ll_env
 from reward import TrainRewardPredictorCallback, RewardPredictor
 from env import RLHFEnv
+from stable_baselines3.common.evaluation import evaluate_policy
 
 import gymnasium as gym
 
@@ -38,9 +39,12 @@ def load_run(model_name):
         obs, rewards, terminated, truncated, info = env.step(action)
         # episode_starts = dones
         env.render()
+        
+    rewards, lens = evaluate_policy(model.policy, env, n_eval_episodes=10, deterministic=True, render=True)
+    print(f'Evaluated model from {model_name} for 10 episodes\n\tMean reward = {np.mean(rewards)} | Std reward {np.std(rewards)} | mean len {np.mean(lens)}')
 
 def rp_train(model_name):    
-    env = make_ll_env(render_mode='human')
+    env = make_ll_env()
     obs_shape = env.observation_space.shape
     action_shape = env.action_space.shape
     reward_model = RewardPredictor(obs_shape, 
@@ -104,7 +108,7 @@ def rp_train(model_name):
 #     model.save(model_name)
 
 def main():
-    rp_train("model")
+    # rp_train("model")
     # normal_train("normal_model")
     load_run("model")
     

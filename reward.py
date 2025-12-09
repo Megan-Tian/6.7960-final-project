@@ -223,11 +223,11 @@ class RewardPredictorNet(torch.nn.Module):
         # labels = [gamma for data in dataset for gamma in data[2]] # extract gamma values from dataset
         # preds = [torch.sigmoid(r2 - r1) for data in dataset for r1, r2 in [self.forward(o1, a1), self.forward(o2, a2)]]
         # loss = self._beta_nll_loss(torch.tensor(labels), torch.stack(preds), self.kappa)
-        print(f'labels {labels} \n preds {preds}')
+        # print(f'labels {labels} \n preds {preds}')
         labels = torch.tensor(labels, requires_grad=True).to(self.device)
         preds = torch.tensor(preds, requires_grad=True).to(self.device)
         self.kappa = torch.tensor([self.kappa]).to(self.device)
-        print(f'labels shape: {labels} | preds shape: {preds} | kappa : {torch.tensor(self.kappa)}')
+        # print(f'labels shape: {labels} | preds shape: {preds} | kappa : {torch.tensor(self.kappa)}')
         loss = self._beta_nll_loss(labels, preds, self.kappa)
 
         loss.backward()
@@ -257,10 +257,10 @@ class RewardPredictorNet(torch.nn.Module):
         alpha = torch.tensor(kappa * p).to(self.device)
         beta = torch.tensor(kappa * (1 - p)).to(self.device)
             
-        print(f'alpha shape: {alpha}')
-        print(f'beta shape: {beta}')
-        print(f'gamma shape: {gamma}')
-        print(f'kappa shape: {kappa}')
+        # print(f'alpha shape: {alpha}')
+        # print(f'beta shape: {beta}')
+        # print(f'gamma shape: {gamma}')
+        # print(f'kappa shape: {kappa}')
         
         # Log probability using lgamma (log of gamma function)
         log_prob = (
@@ -326,9 +326,11 @@ class TrainRewardPredictorCallback(BaseCallback):
 
             # train if we were able to successfully collect trajectory samples
             if len(self.reward_predictor.dataset) > 1:
-                for i in range(10):
+                print(f'Tried to add {k} samples, dataset size = {len(self.reward_predictor.dataset)}')
+                for i in range(100):
                     loss = self.reward_predictor.train()
-                    print(f"Reward Predict loss = {loss}\n")
+                
+                print(f"Reward Predict loss = {loss}")
                     
             self.reward_predictor.reset_temp_experience()
 
