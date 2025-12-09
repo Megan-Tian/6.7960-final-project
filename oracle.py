@@ -30,7 +30,7 @@ def train(save_model_name=ORACLE_NAME, train_from_checkpoint=None):
     else:
         print(f'Training from checkpoint {train_from_checkpoint}')
         model = PPO.load(train_from_checkpoint, env, print_system_info=True)
-    model.learn(total_timesteps=1_000_000)
+    model.learn(total_timesteps=100_000)
     model.save(save_model_name)
     print(f'Saved model to {save_model_name}')
     
@@ -41,14 +41,15 @@ def eval(saved_model_name=ORACLE_NAME):
     n_eval_episodes = 5
     
     # episode is considered a "solution" if it scores >= 200
-    mean_reward, std_reward = evaluate_policy(
+    rewards, ep_lens = evaluate_policy(
         model.policy, 
         env, 
         n_eval_episodes=n_eval_episodes, 
         deterministic=True,
         render=True,
+        return_episode_rewards=True
     )
-    print(f'Evaluated model from {ORACLE_NAME} for {n_eval_episodes} episodes\n\tMean reward = {mean_reward} | Std reward {std_reward}')
+    print(f'Evaluated model from {saved_model_name} for {n_eval_episodes} episodes\n\tMean reward = {rewards.mean()} | Std reward {rewards.std()}')
     
     obs, info = env.reset()
     terminated = truncated = False
@@ -61,5 +62,5 @@ def eval(saved_model_name=ORACLE_NAME):
     
     
 if __name__ == "__main__":
-    train('ppo_lunarlander_3M', 'ppo_lunarlander_2M')
-    eval('ppo_lunarlander_3M')
+    train('ppo_lunarlander_100k', None)
+    eval('ppo_lunarlander_100k')

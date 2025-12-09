@@ -340,11 +340,11 @@ class TrainRewardPredictorCallback(BaseCallback):
             # train if we were able to successfully collect trajectory samples
             if len(self.reward_predictor.dataset) > 1:
                 print(f'Tried to add {k} samples, dataset size = {len(self.reward_predictor.dataset)}')
-                for i in range(100):
+                for i in range(50):
                     loss = self.reward_predictor.train()
                 
                 print(f"Reward Predict loss = {loss}")
-                self.logger.record("custom/reward_predictor_loss", loss)
+                self.logger.record("custom/reward_predictor_loss", loss.item())
                     
             self.reward_predictor.reset_temp_experience()
 

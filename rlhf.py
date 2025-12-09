@@ -80,7 +80,7 @@ def rp_train(model_name):
     callback = TrainRewardPredictorCallback(reward_model)
     
     try:
-        model.learn(30_000, callback=callback)
+        model.learn(100_000, callback=callback)
     except KeyboardInterrupt as e:
         print(e)
 
