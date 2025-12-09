@@ -2,6 +2,7 @@ Variables
 1. Total PPO training steps (n_steps)
 2. Trajectory segment sampling frequency (this is based on n_steps)
 3. Length of a trajectory segment (how many (s,a) pairs per trajectory)
+4. Kappa
 
 Constants:
 - Number of trajectory segments sampled (# of new samples every n_steps = 1% of n_steps)

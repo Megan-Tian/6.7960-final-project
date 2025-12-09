@@ -29,7 +29,7 @@ def load_run(model_name):
                                   n_predictors=N_PREDICTORS,
                                   ),
                   seq_len=SEQ_LEN)
-    print(env.reward_predictor.predictors[0])
+    # print(env.reward_predictor.predictors[0])
     obs, info = env.reset()
     terminated = truncated = False
     
@@ -40,14 +40,14 @@ def load_run(model_name):
         
     rewards, lens = evaluate_policy(model.policy, 
                                     env, 
-                                    n_eval_episodes=10, 
+                                    n_eval_episodes=30, 
                                     deterministic=True, 
                                     # render=True, 
                                     return_episode_rewards=True
                                 )
-    print(f'Evaluated model from {model_name} for 10 episodes\n\tMean reward = {np.mean(rewards)} | Std reward {np.std(rewards)} | mean len {np.mean(lens)}')
+    print(f'Evaluated model from {model_name} for 30 episodes\n\tMean reward = {np.mean(rewards)} | Std reward {np.std(rewards)} | mean len {np.mean(lens)}')
 
-def rp_train(model_name, is_feedback_continuous):
+def rp_train(model_name, is_feedback_continuous, kappa):
     device = get_device()  
     env = make_ll_env()
     obs_shape = env.observation_space.shape
@@ -58,7 +58,8 @@ def rp_train(model_name, is_feedback_continuous):
                                   action_shape, 
                                   seq_len=SEQ_LEN,
                                   n_predictors=N_PREDICTORS,
-                                  device=device
+                                  device=device,
+                                  kappa=kappa
                                   )
     env = RLHFEnv(env, 
                   reward_model,
@@ -66,7 +67,7 @@ def rp_train(model_name, is_feedback_continuous):
     
 
     model = PPO('MlpPolicy', env,
-                         n_steps=4096, # default 2048
+                         n_steps=2048, # default 2048
                          batch_size=64, # default 64
                          verbose=2,
                         #  learning_rate=2e-5, 
@@ -83,10 +84,16 @@ def rp_train(model_name, is_feedback_continuous):
     model.save(model_name)
 
 def main():
-    is_feedback_continuous = False
-    rp_train(f"model_fc={is_feedback_continuous}", is_feedback_continuous)
-    # normal_train("normal_model")
-    load_run(f"model_fc={is_feedback_continuous}")
+    is_feedback_continuous = True
+    kappa = 5
+    rp_train(f"model_fc={is_feedback_continuous}_kappa={kappa}", 
+             is_feedback_continuous,
+             kappa)
+    load_run(f"model_fc={is_feedback_continuous}_kappa={kappa}")
+    # load_run('results/rq2/continuous_nsteps_1024/model_fc=True')
+    # load_run('results/continuous_ 200k/model_tmp_fc=True_200k')
+    # load_run('results/rq2/continuous_nsteps_4096/model_fc=True')
+    
     
 
 if __name__ == "__main__":

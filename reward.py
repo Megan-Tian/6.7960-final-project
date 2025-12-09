@@ -14,7 +14,8 @@ class RewardPredictor():
                  seq_len : int,
                  n_predictors : int,
                 #  n_action : int, # TODO idk abt this one
-                 device : str = 'cuda')-> None:
+                 device : str = 'cuda',
+                 kappa : int = 10)-> None:
         
         if torch.cuda.is_available():
             self.device = device
@@ -27,7 +28,8 @@ class RewardPredictor():
         self.predictors = [RewardPredictorNet(obs_shape, 
                                               action_shape, 
                                               seq_len, 
-                                              device
+                                              device,
+                                              kappa
                                               ).to(device) 
                            for _ in range(n_predictors)]
         
