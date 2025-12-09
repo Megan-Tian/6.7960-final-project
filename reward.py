@@ -4,6 +4,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 from utils import RunningStat
+from stable_baselines3.common.callbacks import BaseCallback
 
 class RewardPredictor():
     def __init__(self,
@@ -135,7 +136,7 @@ class RewardPredictor():
             
             self.add_feedback(seg1=(seq_obs_1, seq_actions_1), 
                                   seg2=(seq_obs_2, seq_actions_2), 
-                                  gamma=torch.Tensor([gamma]))
+                                  gamma=torch.tensor([gamma]))
             
 
 class RewardPredictorNet(torch.nn.Module):
@@ -216,10 +217,18 @@ class RewardPredictorNet(torch.nn.Module):
             r2 = self.forward(o2, a2)
             
             labels.append(gamma)
-            preds.append(torch.sigmoid(r2 - r1))
+            preds.append(torch.sigmoid(r2 - r1).sum())
         
         # compute beta log likelihood loss
-        loss = self._beta_nll_loss(torch.tensor(labels), torch.tensor(preds), self.kappa)
+        # labels = [gamma for data in dataset for gamma in data[2]] # extract gamma values from dataset
+        # preds = [torch.sigmoid(r2 - r1) for data in dataset for r1, r2 in [self.forward(o1, a1), self.forward(o2, a2)]]
+        # loss = self._beta_nll_loss(torch.tensor(labels), torch.stack(preds), self.kappa)
+        print(f'labels {labels} \n preds {preds}')
+        labels = torch.tensor(labels, requires_grad=True).to(self.device)
+        preds = torch.tensor(preds, requires_grad=True).to(self.device)
+        self.kappa = torch.tensor([self.kappa]).to(self.device)
+        print(f'labels shape: {labels} | preds shape: {preds} | kappa : {torch.tensor(self.kappa)}')
+        loss = self._beta_nll_loss(labels, preds, self.kappa)
 
         loss.backward()
         self.optimizer.step()
@@ -238,17 +247,24 @@ class RewardPredictorNet(torch.nn.Module):
         Returns:
             log_prob: log probability for each sample, shape (batch_size,)
         """
+        kappa = torch.tensor([kappa]).to(self.device)
+
         # Clip to avoid numerical issues
-        gamma = torch.clamp(gamma, 1e-7, 1 - 1e-7)
-        p = torch.clamp(p, 1e-7, 1 - 1e-7)
+        gamma = torch.clamp(gamma, 1e-7, 1 - 1e-7).to(self.device)
+        p = torch.clamp(p, 1e-7, 1 - 1e-7).to(self.device)
         
         # Beta parameters
-        alpha = kappa * p
-        beta = kappa * (1 - p)
+        alpha = torch.tensor(kappa * p).to(self.device)
+        beta = torch.tensor(kappa * (1 - p)).to(self.device)
+            
+        print(f'alpha shape: {alpha}')
+        print(f'beta shape: {beta}')
+        print(f'gamma shape: {gamma}')
+        print(f'kappa shape: {kappa}')
         
         # Log probability using lgamma (log of gamma function)
         log_prob = (
-            torch.lgamma(kappa) 
+            torch.lgamma(kappa) # log(kappa)
             - torch.lgamma(alpha) 
             - torch.lgamma(beta)
             + (alpha - 1) * torch.log(gamma)
@@ -272,3 +288,51 @@ class RewardPredictorNet(torch.nn.Module):
         """
         log_prob = self._beta_log_likelihood(gamma, p, kappa)
         return -log_prob.mean()
+    
+    
+    
+class TrainRewardPredictorCallback(BaseCallback):
+    def __init__(self, rp: RewardPredictor, verbose=0):
+        super(TrainRewardPredictorCallback, self).__init__(verbose)
+        self.reward_predictor = rp
+        self.true_rewards = []
+        self.pred_rewards = []
+        self.accumulated_true_reward = 0
+
+    def _on_step(self) -> bool:
+        true_reward = self.locals.get("infos", None)[-1].get("true_reward", None)
+        pred_reward = self.locals.get("infos", None)[-1].get("pred_reward", None)
+        self.true_rewards.append(true_reward)
+        self.pred_rewards.append(pred_reward)
+        self.accumulated_true_reward += true_reward
+        
+        return True
+
+    def _on_rollout_end(self) -> None:
+        ep_true_reward = sum(self.true_rewards)
+        self.logger.record("custom/true_reward", ep_true_reward)
+        self.logger.record_mean("custom/true_reward_mean", ep_true_reward)
+        self.logger.record("custom/accumaltive_true_reward", self.accumulated_true_reward)
+
+        if self.reward_predictor:
+   
+            ep_pred_reward = sum(self.pred_rewards)
+            self.logger.record("custom/pred_reward", ep_pred_reward)
+            
+            # get synthetic feedback
+            k = int(len(self.reward_predictor.temp_experience['seq_obs']) * 0.01) # 1%
+            k = k if k > 1 else 2
+            self.reward_predictor.get_synthetic_feedback(k)
+
+            # train if we were able to successfully collect trajectory samples
+            if len(self.reward_predictor.dataset) > 1:
+                for i in range(10):
+                    loss = self.reward_predictor.train()
+                    print(f"Reward Predict loss = {loss}\n")
+                    
+            self.reward_predictor.reset_temp_experience()
+
+            self.logger.record("custom/D", len(self.reward_predictor.dataset))
+            
+        self.true_rewards.clear()
+        self.pred_rewards.clear()
