@@ -115,11 +115,16 @@ class RewardPredictor():
             seq_obs_1, seq_obs_2 = self.temp_experience['seq_obs'][segments[0]], self.temp_experience['seq_obs'][segments[1]]
             seq_actions_1, seq_actions_2 = self.temp_experience['seq_actions'][segments[0]], self.temp_experience['seq_actions'][segments[1]]
             true_rewards_1, true_rewards_2 = self.temp_experience['true_reward'][segments[0]], self.temp_experience['true_reward'][segments[1]]
-            
+
             true_rewards_1, true_rewards_2 = np.array(true_rewards_1), np.array(true_rewards_2)
 
             true_r_1_sum, true_r_2_sum = true_rewards_1.sum(), true_rewards_2.sum()
             
+            # print(f'seq_obs_1 shape: {seq_obs_1.shape} | seq_obs_2 shape: {seq_obs_2.shape}')
+            # print(f'seq_actions_1 shape: {seq_actions_1.shape} | seq_actions_2 shape: {seq_actions_2.shape}')
+            # print(f'true_rewards_1 : {true_rewards_1} | true_rewards_2 : {true_rewards_2}')
+            # raise KeyError
+
             # if both trajectory segments are empty / zero truereward, skip and pick new segments
             if true_r_1_sum + true_r_2_sum == 0.0:
                 continue
@@ -222,9 +227,9 @@ class RewardPredictorNet(torch.nn.Module):
             # a probability that can be supervised by the rankings
             labels.append(gamma) 
             total_reward_difference_over_segment = (r2 - r1).sum()
-            print(f'total_reward_difference_over_segment: {total_reward_difference_over_segment}')
+            # print(f'total_reward_difference_over_segment: {total_reward_difference_over_segment}')
             preds.append(torch.sigmoid(total_reward_difference_over_segment))
-            print(f'preds: {preds}')
+            # print(f'preds: {preds}')
             # raise KeyError
         
         # compute beta log likelihood loss
@@ -339,6 +344,7 @@ class TrainRewardPredictorCallback(BaseCallback):
                     loss = self.reward_predictor.train()
                 
                 print(f"Reward Predict loss = {loss}")
+                self.logger.record("custom/reward_predictor_loss", loss)
                     
             self.reward_predictor.reset_temp_experience()
 

@@ -20,7 +20,7 @@ class RLHFEnv(gym.Wrapper):
     def reset(self, **kwargs):
         self.seq_actions = np.zeros((self.seq_len, self.action_space.n), dtype=np.float32)
         self.seq_obs = np.zeros([self.seq_len] + [i for i in self.observation_space.shape], dtype=np.float32)
-        
+        self.seq_rewards = np.zeros(self.seq_len, dtype=np.float32)
         obs, info = self.env.reset(**kwargs)
         self.seq_obs[-1] = obs
         
@@ -39,13 +39,19 @@ class RLHFEnv(gym.Wrapper):
         self.seq_obs[:-1] = self.seq_obs[1:]
         self.seq_obs[-1] = obs
         
+        self.seq_rewards[:-1] = self.seq_rewards[1:]
+        self.seq_rewards[-1] = true_reward
+        
         # compute predicted reward
         seq_obs = torch.tensor(self.seq_obs, dtype=torch.float32)
         seq_actions = torch.tensor(self.seq_actions, dtype=torch.float32)
+        seq_rewards = torch.tensor(self.seq_rewards, dtype=torch.float32)
         
         # FIXME ---------------------------
+        # check how i'm implementing the reward saving - is it per step the same
+        # as obs and actions? or the full reward for the trajectory?
         pred_reward = self.reward_predictor.predict(seq_obs, seq_actions)
-        self.reward_predictor.add_temp_experience(seq_obs, seq_actions, true_reward)
+        self.reward_predictor.add_temp_experience(seq_obs, seq_actions, seq_rewards)
         # ---------------------------------
         
         info['pred_reward'] = pred_reward.item()
