@@ -113,9 +113,9 @@ def rp_train(model_name):
 #     model.save(model_name)
 
 def main():
-    rp_train("model_tmp")
+    rp_train("model_tmp_2")
     # normal_train("normal_model")
-    load_run("model_tmp")
+    load_run("model_tmp_2")
     
 
 if __name__ == "__main__":

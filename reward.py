@@ -145,113 +145,82 @@ class RewardPredictor():
             
 
 class RewardPredictorNet(torch.nn.Module):
-    def __init__(self, 
-                 obs_shape : tuple, 
-                 action_shape : tuple, 
-                 seq_len : int,
-                 device : str = 'cuda',
-                 lr = 5e-4,
-                 weight_decay = 1e-4,
-                 kappa = 10
-                )-> None:
+    def __init__(self, obs_shape, action_shape, seq_len, device='cuda', lr=5e-4, weight_decay=1e-4, kappa=10):
         super().__init__()
-        
-        # FIXME discrete actions are one-hot in gym---the +4 right now for lunar lander is hardcoded
         self.input_flattened_shape = (math.prod(obs_shape) + 4) * seq_len
-        # self.output_flattened_shape = math.prod(action_shape)
-        # print(f'input_flattened_shape: {self.input_flattened_shape}')
-        # print(f'output_flattened_shape: {self.output_flattened_shape}')
         
-        # hidden layers and activations from Appendix A.1 of Christiano et al 2017
         self.model = torch.nn.Sequential(
             torch.nn.Linear(self.input_flattened_shape, 64),
             torch.nn.LeakyReLU(0.01),
             torch.nn.Linear(64, 64), 
             torch.nn.LeakyReLU(0.01),
-            torch.nn.Linear(64, seq_len) # scalar reward dum dum
+            torch.nn.Linear(64, seq_len)
         )
         
         self.device = device
-        self.lr = lr
-        self.weight_decay = weight_decay
-        
         self.kappa = kappa
         
-        # print(f'RewardPredictorNet initialized!')
-        # print(f'{self.model}')
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
+
+    def forward(self, seq_obs: torch.Tensor, seq_actions: torch.Tensor):
+        # add batching
+        if seq_obs.dim() == 2: 
+            seq_obs = seq_obs.unsqueeze(0)
+            seq_actions = seq_actions.unsqueeze(0)
+
+        # flatten starting from dimension 1 (keeping batch dimension 0)
+        batch_size = seq_obs.shape[0]
+        seq_obs_flat = seq_obs.reshape(batch_size, -1)
+        seq_actions_flat = seq_actions.reshape(batch_size, -1)
         
-        self.optimizer = torch.optim.Adam(self.parameters(), 
-                                          lr=self.lr, 
-                                          weight_decay=self.weight_decay,
-                                          )
-    
-    def forward(self, seq_obs: torch.Tensor, seq_actions : torch.Tensor):
-        seq_obs = seq_obs.to(self.device)
-        seq_actions = seq_actions.to(self.device)
-        
-        # flatten input obs
-        seq_obs_flat = torch.flatten(seq_obs)
-        # print(f'seq_obs_flat shape: {seq_obs_flat.shape}')
-        seq_actions_flat = torch.flatten(seq_actions)
-        # print(f'seq_actions_flat shape: {seq_actions_flat.shape}')
-        
-        # print(f'torch.cat(...) shape: {torch.cat((seq_obs_flat, seq_actions_flat)).shape}')
-        
-        return self.model(torch.cat((seq_obs_flat, seq_actions_flat)))
+        x = torch.cat((seq_obs_flat, seq_actions_flat), dim=1)
+        return self.model(x)
     
     def train_step(self, dataset) -> float:
-        '''
-        `data` has data samples (traj1, traj2, mu)
-        '''
         self.optimizer.zero_grad()
-        run_loss = 0
         
-        labels = [] # ground truth
-        preds = []
+        # vectorize training, data loading needs to be done by separating data into lists
+        o1_list, a1_list, o2_list, a2_list, gamma_list = [], [], [], [], []
         
         for data in dataset:
-            (o1, a1), (o2, a2), gamma = data # shapes o1=o2=(seg_len, obs_shape), a1=a2=(seg_len, action_shape), gamma=(seg_len,)
-            
-            o1 = o1.to(self.device)
-            a1 = a1.to(self.device)
-            o2 = o2.to(self.device)
-            a2 = a2.to(self.device)
-            gamma = gamma.to(self.device)
-            
-            r1 = self.forward(o1, a1) # shape (seq_len,)
-            r2 = self.forward(o2, a2) # shape (seq_len,)
-            # print(f'r1 shape: {r1.shape} | r2 shape: {r2.shape}')
-            
-            # remember that the labels = rankings while preds = rewards
-            # these are NOT the same!!! need to convert model output of rewards into
-            # a probability that can be supervised by the rankings
-            labels.append(gamma) 
-            total_reward_difference_over_segment = (r2 - r1).sum()
-            # print(f'total_reward_difference_over_segment: {total_reward_difference_over_segment}')
-            preds.append(torch.sigmoid(total_reward_difference_over_segment))
-            # print(f'preds: {preds}')
-            # raise KeyError
+            (o1, a1), (o2, a2), gamma = data
+            o1_list.append(o1)
+            a1_list.append(a1)
+            o2_list.append(o2)
+            a2_list.append(a2)
+            gamma_list.append(gamma)
         
-        # compute beta log likelihood loss
-        # labels = [gamma for data in dataset for gamma in data[2]] # extract gamma values from dataset
-        # preds = [torch.sigmoid(r2 - r1) for data in dataset for r1, r2 in [self.forward(o1, a1), self.forward(o2, a2)]]
-        # loss = self._beta_nll_loss(torch.tensor(labels), torch.stack(preds), self.kappa)
-        # print(f'labels {labels} \n preds {preds}')
-        labels = torch.tensor(labels, requires_grad=True).to(self.device)
-        preds = torch.tensor(preds, requires_grad=True).to(self.device)
-        assert torch.all((preds >= 0) & (preds <= 1)), "ERROR preds must be in [0,1]"
-        self.kappa = torch.tensor([self.kappa]).to(self.device)
-        # print(f'labels shape: {labels} | preds shape: {preds} | kappa : {torch.tensor(self.kappa)}')
-        loss = self._beta_nll_loss(labels, preds, self.kappa)
+        # stack into tensors for batch processing
+        o1_batch = torch.stack(o1_list).to(self.device)
+        a1_batch = torch.stack(a1_list).to(self.device)
+        o2_batch = torch.stack(o2_list).to(self.device)
+        a2_batch = torch.stack(a2_list).to(self.device)
+        
+        # ensure gamma is the right shape (Batch_Size,)
+        gamma_batch = torch.tensor(gamma_list, requires_grad=True, dtype=torch.float32).to(self.device).view(-1)
 
+        # Single forward pass for the whole batch
+        r1 = self.forward(o1_batch, a1_batch) # Shape: (Batch, Seq_Len)
+        r2 = self.forward(o2_batch, a2_batch)
+        
+        # sum rewards across sequence dimension (dim 1) BEFORE sigmoid
+        # r1_sum shape: (Batch,)
+        r1_sum = r1.sum(dim=1)
+        r2_sum = r2.sum(dim=1)
+        
+        # predict preference from trajectory segment rewards r1_sum and r2_sum
+        preds = torch.tensor(torch.sigmoid(r2_sum - r1_sum), requires_grad=True).to(self.device)
+        
+        # self.kappa.to(self.device)
+        loss = self._beta_nll_loss(gamma_batch, preds, self.kappa)
         loss.backward()
         self.optimizer.step()
         
         return loss
-    
-    def _beta_log_likelihood(self, gamma, p, kappa):
+
+    def _beta_nll_loss(self, gamma, p, kappa):
         """
-        Compute log probability of gamma under Beta(kappa*p, kappa*(1-p))
+        Negative log-likelihood loss for Beta distribution
         
         Args:
             gamma: observed ratings in [0,1], shape (batch_size,)
@@ -259,9 +228,13 @@ class RewardPredictorNet(torch.nn.Module):
             kappa: concentration parameter, scalar or shape (batch_size,)
         
         Returns:
-            log_prob: log probability for each sample, shape (batch_size,)
+            loss: scalar negative log-likelihood
         """
         kappa = torch.tensor([kappa]).to(self.device)
+        assert (torch.all((gamma >= 0) & (gamma <= 1)), 
+                f"ERROR observed ratings gamma must be in [0,1], gamma = {gamma}")
+        assert (torch.all((p >= 0) & (p <= 1)), 
+                f"ERROR predicted probabilities p must be in [0,1], p = {p}")
 
         # Clip to avoid numerical issues
         gamma = torch.clamp(gamma, 1e-7, 1 - 1e-7).to(self.device)
@@ -270,12 +243,7 @@ class RewardPredictorNet(torch.nn.Module):
         # Beta parameters
         alpha = torch.tensor(kappa * p).to(self.device)
         beta = torch.tensor(kappa * (1 - p)).to(self.device)
-            
-        # print(f'alpha shape: {alpha}')
-        # print(f'beta shape: {beta}')
-        # print(f'gamma shape: {gamma}')
-        # print(f'kappa shape: {kappa}')
-        
+ 
         # Log probability using lgamma (log of gamma function)
         log_prob = (
             torch.lgamma(kappa) # log(kappa)
@@ -285,25 +253,12 @@ class RewardPredictorNet(torch.nn.Module):
             + (beta - 1) * torch.log(1 - gamma)
         )
         
-        return log_prob
-
-
-    def _beta_nll_loss(self, gamma, p, kappa):
-        """
-        Negative log-likelihood loss for Beta distribution
-        
-        Args:
-            gamma: observed ratings, shape (batch_size,)
-            p: predicted probabilities, shape (batch_size,)
-            kappa: concentration parameter
-        
-        Returns:
-            loss: scalar negative log-likelihood
-        """
-        log_prob = self._beta_log_likelihood(gamma, p, kappa)
         return -log_prob.mean()
+
+
     
-    
+
+
     
 class TrainRewardPredictorCallback(BaseCallback):
     def __init__(self, rp: RewardPredictor, verbose=0):
@@ -329,7 +284,6 @@ class TrainRewardPredictorCallback(BaseCallback):
         self.logger.record("custom/accumaltive_true_reward", self.accumulated_true_reward)
 
         if self.reward_predictor:
-   
             ep_pred_reward = sum(self.pred_rewards)
             self.logger.record("custom/pred_reward", ep_pred_reward)
             
@@ -349,7 +303,7 @@ class TrainRewardPredictorCallback(BaseCallback):
                     
             self.reward_predictor.reset_temp_experience()
 
-            self.logger.record("custom/D", len(self.reward_predictor.dataset))
+            self.logger.record("custom/dataset_len", len(self.reward_predictor.dataset))
             
         self.true_rewards.clear()
         self.pred_rewards.clear()
