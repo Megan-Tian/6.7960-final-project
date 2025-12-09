@@ -213,11 +213,19 @@ class RewardPredictorNet(torch.nn.Module):
             a2 = a2.to(self.device)
             gamma = gamma.to(self.device)
             
-            r1 = self.forward(o1, a1)
-            r2 = self.forward(o2, a2)
+            r1 = self.forward(o1, a1) # shape (seq_len,)
+            r2 = self.forward(o2, a2) # shape (seq_len,)
+            # print(f'r1 shape: {r1.shape} | r2 shape: {r2.shape}')
             
-            labels.append(gamma)
-            preds.append(torch.sigmoid(r2 - r1).sum())
+            # remember that the labels = rankings while preds = rewards
+            # these are NOT the same!!! need to convert model output of rewards into
+            # a probability that can be supervised by the rankings
+            labels.append(gamma) 
+            total_reward_difference_over_segment = (r2 - r1).sum()
+            print(f'total_reward_difference_over_segment: {total_reward_difference_over_segment}')
+            preds.append(torch.sigmoid(total_reward_difference_over_segment))
+            print(f'preds: {preds}')
+            # raise KeyError
         
         # compute beta log likelihood loss
         # labels = [gamma for data in dataset for gamma in data[2]] # extract gamma values from dataset
