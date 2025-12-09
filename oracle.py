@@ -6,6 +6,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.sac.policies import MlpPolicy
 
 ORACLE_NAME = 'ppo_lunarlander'
+TRAIN_STEPS = 200_000
 
 def make_ll_env(render_mode = None):
     return gym.make(
@@ -31,7 +32,7 @@ def train(save_model_name=ORACLE_NAME, train_from_checkpoint=None):
     else:
         print(f'Training from checkpoint {train_from_checkpoint}')
         model = PPO.load(train_from_checkpoint, env, print_system_info=True)
-    model.learn(total_timesteps=100_000)
+    model.learn(total_timesteps=TRAIN_STEPS)
     model.save(save_model_name)
     print(f'Saved model to {save_model_name}')
     
@@ -63,5 +64,5 @@ def eval(saved_model_name=ORACLE_NAME):
     
     
 if __name__ == "__main__":
-    # train('ppo_lunarlander_100k', None)
-    eval('ppo_lunarlander_100k')
+    train(f'ppo_lunarlander_{TRAIN_STEPS}', None)
+    eval(f'ppo_lunarlander_{TRAIN_STEPS}')

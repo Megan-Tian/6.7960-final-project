@@ -3,6 +3,7 @@ from random import sample
 import gymnasium as gym
 import numpy as np
 import torch
+from tqdm import tqdm
 from utils import RunningStat
 from stable_baselines3.common.callbacks import BaseCallback
 
@@ -101,7 +102,7 @@ class RewardPredictor():
         gamma = torch.tensor(gamma, dtype=torch.float32)
         self.dataset.append((seg1, seg2, gamma))
     
-    def get_synthetic_feedback(self, k : int):
+    def get_synthetic_feedback(self, k : int, is_feedback_continuous : bool):
         '''
         Args:        
             k: number of trajectories to add to `self.dataset` and generate synthetic 
@@ -129,15 +130,25 @@ class RewardPredictor():
             if true_r_1_sum + true_r_2_sum == 0.0:
                 continue
             
-            # both trajectories have same total true reward --> indicate no preference
-            if true_r_1_sum == true_r_2_sum:
-                gamma = 0.5
-            # traj seg 2 better than 1
-            elif true_r_2_sum > true_r_1_sum:
-                gamma = (true_r_2_sum) / (true_r_1_sum + true_r_2_sum)
-            # traj seg 1 better than 2
-            else: 
-                gamma = (true_r_1_sum) / (true_r_1_sum + true_r_2_sum)
+            if is_feedback_continuous:
+                # both trajectories have same total true reward --> indicate no preference
+                if true_r_1_sum == true_r_2_sum:
+                    gamma = 0.5
+                # traj seg 2 better than 1
+                elif true_r_2_sum > true_r_1_sum:
+                    gamma = (true_r_2_sum) / (true_r_1_sum + true_r_2_sum)
+                # traj seg 1 better than 2
+                else: 
+                    gamma = (true_r_1_sum) / (true_r_1_sum + true_r_2_sum)
+            else:
+                if true_r_1_sum == true_r_2_sum:
+                    gamma = 0.5
+                # traj seg 2 better than 1
+                elif true_r_2_sum > true_r_1_sum:
+                    gamma = 1
+                # traj seg 1 better than 2
+                else: 
+                    gamma = 0
             
             self.add_feedback(seg1=(seq_obs_1, seq_actions_1), 
                                   seg2=(seq_obs_2, seq_actions_2), 
@@ -261,12 +272,13 @@ class RewardPredictorNet(torch.nn.Module):
 
     
 class TrainRewardPredictorCallback(BaseCallback):
-    def __init__(self, rp: RewardPredictor, verbose=0):
+    def __init__(self, rp: RewardPredictor, is_feedback_continuous : bool, verbose=0):
         super(TrainRewardPredictorCallback, self).__init__(verbose)
         self.reward_predictor = rp
         self.true_rewards = []
         self.pred_rewards = []
         self.accumulated_true_reward = 0
+        self.is_feedback_continuous = is_feedback_continuous
 
     def _on_step(self) -> bool:
         true_reward = self.locals.get("infos", None)[-1].get("true_reward", None)
@@ -290,12 +302,12 @@ class TrainRewardPredictorCallback(BaseCallback):
             # get synthetic feedback
             k = int(len(self.reward_predictor.temp_experience['seq_obs']) * 0.01) # 1%
             k = k if k > 1 else 2
-            self.reward_predictor.get_synthetic_feedback(k)
+            self.reward_predictor.get_synthetic_feedback(k, self.is_feedback_continuous)
 
             # train if we were able to successfully collect trajectory samples
             if len(self.reward_predictor.dataset) > 1:
                 print(f'Tried to add {k} samples, dataset size = {len(self.reward_predictor.dataset)}')
-                for i in range(50):
+                for i in tqdm(range(50)):
                     loss = self.reward_predictor.train()
                 
                 print(f"Reward Predict loss = {loss}")

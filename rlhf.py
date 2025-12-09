@@ -47,7 +47,7 @@ def load_run(model_name):
                                 )
     print(f'Evaluated model from {model_name} for 10 episodes\n\tMean reward = {np.mean(rewards)} | Std reward {np.std(rewards)} | mean len {np.mean(lens)}')
 
-def rp_train(model_name):  
+def rp_train(model_name, is_feedback_continuous):
     device = get_device()  
     env = make_ll_env()
     obs_shape = env.observation_space.shape
@@ -66,25 +66,27 @@ def rp_train(model_name):
     
 
     model = PPO('MlpPolicy', env,
-                         n_steps=512,
-                         batch_size=64,
+                         n_steps=2048, # default 2048
+                         batch_size=64, # default 64
                          verbose=2,
-                         learning_rate=2e-5, tensorboard_log="reward_pred_runs/rlfhp")
+                        #  learning_rate=2e-5, 
+                         tensorboard_log="reward_pred_runs/rlfhp")
     #print(model.policy)
 
-    callback = TrainRewardPredictorCallback(reward_model)
+    callback = TrainRewardPredictorCallback(reward_model, is_feedback_continuous)
     
     try:
-        model.learn(100_000, callback=callback)
+        model.learn(200_000, callback=callback)
     except KeyboardInterrupt as e:
         print(e)
 
     model.save(model_name)
 
 def main():
-    rp_train("model_tmp")
+    is_feedback_continuous = False
+    rp_train(f"model_tmp_fc={is_feedback_continuous}", is_feedback_continuous)
     # normal_train("normal_model")
-    load_run("model_tmp")
+    load_run(f"model_tmp_fc={is_feedback_continuous}")
     
 
 if __name__ == "__main__":
