@@ -15,7 +15,6 @@ def get_device():
 
 def load_run(model_name):
     model = PPO.load(f'{model_name}.zip')
-    
     env = make_ll_env(render_mode='human')
     obs_shape = env.observation_space.shape
     action_shape = env.action_space.shape
@@ -26,7 +25,7 @@ def load_run(model_name):
                                   n_predictors=10,
                                   ),
                   seq_len=10)
-    
+    print(env.reward_predictor.predictors[0])
     obs, info = env.reset()
     terminated = truncated = False
     # # cell and hidden state of the LSTM
@@ -40,7 +39,13 @@ def load_run(model_name):
         # episode_starts = dones
         env.render()
         
-    rewards, lens = evaluate_policy(model.policy, env, n_eval_episodes=10, deterministic=True, render=True)
+    rewards, lens = evaluate_policy(model.policy, 
+                                    env, 
+                                    n_eval_episodes=10, 
+                                    deterministic=True, 
+                                    render=True, 
+                                    return_episode_rewards=True
+                                )
     print(f'Evaluated model from {model_name} for 10 episodes\n\tMean reward = {np.mean(rewards)} | Std reward {np.std(rewards)} | mean len {np.mean(lens)}')
 
 def rp_train(model_name):    
@@ -108,9 +113,9 @@ def rp_train(model_name):
 #     model.save(model_name)
 
 def main():
-    # rp_train("model")
+    rp_train("model_tmp")
     # normal_train("normal_model")
-    load_run("model")
+    load_run("model_tmp")
     
 
 if __name__ == "__main__":
